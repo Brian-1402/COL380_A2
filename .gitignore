@@ -7,3 +7,7 @@
 
 env
 compile_commands.json
+
+# config files
+*.code-workspace
+.vscode/
