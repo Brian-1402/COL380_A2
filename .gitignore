@@ -5,6 +5,8 @@
 *.cubin
 *.fatbin
 
+*.out
+
 env
 compile_commands.json
 
