@@ -25,14 +25,12 @@ __global__ void tanh(float ** inputMatrix, float ** outputMatrix) {
 
 // sigmoid value of each element of the vector
 __global__ void sigmoid(float* inputVector, float* outputVector) {
-
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	outputVector[i] = 1 / (1 + exp(-inputVector[i]));
 }
 
 // softmax value of each element of the vector
 __global__ void softmax(float* inputVector, float* outputVector) {
-
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	outputVector[i] = exp(inputVector[i]);
 
@@ -43,10 +41,8 @@ __global__ void softmax(float* inputVector, float* outputVector) {
 	__shared__ int sum;
 	if(threadIdx.x == 0) {
 		sum = 0;
-		for(int j = 0; j < blockDim.x; j++) {
+		for(int j = 0; j < blockDim.x; j++)
 			sum += outputVector[j];
-
-		}
 	}
 	__syncthreads();
 
@@ -78,14 +74,12 @@ __global__ void Pool(float** inputMatrix, float** outputMatrix, int pooldim, int
 	if (pooltype == MAXPOOL)
 		val = inputMatrix[i * stride][j * stride];
 
-	for (int k = 0; k < pooldim; k++) {
-		for (int l = 0; l < pooldim; l++) {
+	for (int k = 0; k < pooldim; k++)
+		for (int l = 0; l < pooldim; l++)
 			if (pooltype == MAXPOOL)
 				val = max(val, inputMatrix[i * stride + k][j * stride + l]);
 			else if (pooltype == AVGPOOL)
 				val += inputMatrix[i * stride + k][j * stride + l];
-		}
-	}
 
 	if (pooltype == AVGPOOL)
 		val = val / pow(2.0f, pooldim);
@@ -98,11 +92,9 @@ __global__ void convolveMatrix(float** inputMatrix, float** outputMatrix, float*
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j = blockIdx.y * blockDim.y + threadIdx.y;
 	float val = 0.0f;
-	for (int k = 0; k < kernel_size; k++) {
-		for (int l = 0; l < kernel_size; l++) {
+	for (int k = 0; k < kernel_size; k++)
+		for (int l = 0; l < kernel_size; l++)
 			val += inputMatrix[i * stride + k][j * stride + l] * kernel[k][l];
-		}
-	}
 	outputMatrix[i][j] = val;
 }
 
