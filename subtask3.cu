@@ -51,11 +51,18 @@ __global__ void Pool(float*** inputMatrix, float*** outputMatrix, int pooldim, i
 
 
 __global__ void padMatrix(float*** inputMatrix, float*** outputMatix, int padding){
-	int i = blockIdx.x * blockDim.x + threadIdx.x; // height of output image
-	int j = blockIdx.y * blockDim.y + threadIdx.y; // width of output image
-	int k = blockIdx.z * blockDim.z + threadIdx.z; // channel of output image
+	int i = blockIdx.x * blockDim.x + threadIdx.x; // height of input image
+	int j = blockIdx.y * blockDim.y + threadIdx.y; // width of input image
+	int k = blockIdx.z * blockDim.z + threadIdx.z; // channel of input image
 	outputMatix[k][i + padding][j + padding] = inputMatrix[k][i][j];
 }
 
+
+// Apply ReLU activation to each element of the matrix
+__global__ void reLU(float ** inputMatrix, float ** outputMatrix) {
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	int j = blockIdx.y * blockDim.y + threadIdx.y;
+	outputMatrix[i][j] = max(0.0f,inputMatrix[i][j]);
+}
 
 

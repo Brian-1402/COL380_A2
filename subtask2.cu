@@ -116,20 +116,21 @@ int test_pool(){
 	float outputMatrix[2][2];
 	// device input matrix
 	float** d_inputMatrix;
-	cudaMalloc(&d_inputMatrix, inputsize * inputsize * sizeof(float));
-	cudaMemcpy(d_inputMatrix, inputMatrix, inputsize * inputsize * sizeof(float), cudaMemcpyHostToDevice);
 	// device output matrix
 	float** d_outputMatrix;
-	cudaMalloc(&d_outputMatrix, outputsize * outputsize * sizeof(float));
 	// number of threads per block
 	dim3 threadsPerBlock(2, 2);
 	// number of blocks
 	int blocksPerGrid = 1;
+	cudaMalloc(&d_inputMatrix, inputsize * inputsize * sizeof(float));
+	cudaMemcpy(d_inputMatrix, inputMatrix, inputsize * inputsize * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMalloc(&d_outputMatrix, outputsize * outputsize * sizeof(float));
 	// call Pool function
 	Pool <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, 2, MAXPOOL);
 	// copy output matrix from device to host
 	cudaMemcpy(outputMatrix, d_outputMatrix, outputsize * outputsize * sizeof(float), cudaMemcpyDeviceToHost);
 	// print output matrix
+	cudaDeviceSynchronize();
 	for (int i = 0; i < outputsize; i++) {
 		for (int j = 0; j < outputsize; j++) {
 			cout << outputMatrix[i][j] << " ";
@@ -149,22 +150,22 @@ void test_softmax(){
 	float inputVector[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 	// output vector
 	float outputVector[inputsize];
-
-	// device input vector
-	float* d_inputVector;
-	cudaMalloc(&d_inputVector, inputsize * sizeof(float));
-	cudaMemcpy(d_inputVector, inputVector, inputsize * sizeof(float), cudaMemcpyHostToDevice);
 	// device output vector
 	float* d_outputVector;
-	cudaMalloc(&d_outputVector, inputsize * sizeof(float));
+	// device input vector
+	float* d_inputVector;
 	// number of threads per block
 	int threadsPerBlock = 10;
 	// number of blocks
 	int blocksPerGrid = 1;
+	cudaMalloc(&d_inputVector, inputsize * sizeof(float));
+	cudaMemcpy(d_inputVector, inputVector, inputsize * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMalloc(&d_outputVector, inputsize * sizeof(float));
 	// call sigmoid function
 	softmax <<<blocksPerGrid, threadsPerBlock >>> (d_inputVector, d_outputVector);
 	// copy output vector from device to host
 	cudaMemcpy(outputVector, d_outputVector, inputsize * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaDeviceSynchronize();
 	// print output vector
 	for (int i = 0; i < inputsize; i++) {
 		cout << outputVector[i] << " ";
@@ -222,18 +223,19 @@ int main(int argc, char** argv){
 		float outputMatrix[N][N];
 		float** d_inputMatrix;
 		float** d_kernel;
-		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
-		cudaMalloc(&d_kernel, M * M * sizeof(float));
-		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		float** d_paddedMatrix;
-		cudaMalloc(&d_paddedMatrix, (N + 2 * P) * (N + 2 * P) * sizeof(float));
-		padMatrix <<<1, dim3(N, N)>>> (d_inputMatrix, d_paddedMatrix, P); //! Check dimensions
 		float** d_outputMatrix;
-		cudaMalloc(&d_outputMatrix, N * N * sizeof(float));
 		dim3 threadsPerBlock(2, 2);
 		int blocksPerGrid = 1;
+		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
+		cudaMalloc(&d_kernel, M * M * sizeof(float));
+		cudaMalloc(&d_paddedMatrix, (N + 2 * P) * (N + 2 * P) * sizeof(float));
+		cudaMalloc(&d_outputMatrix, N * N * sizeof(float));
+		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
+		padMatrix <<<1, dim3(N, N)>>> (d_inputMatrix, d_paddedMatrix, P); //! Check dimensions
 		convolveMatrix <<<blocksPerGrid, threadsPerBlock>>> (d_paddedMatrix, d_outputMatrix, d_kernel, M, 1); //! Check dimensions
 		cudaMemcpy(outputMatrix, d_outputMatrix, N * N * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaDeviceSynchronize();
 		cout << "Output Matrix:" << endl;
 		for (int i = 0; i < N; i++){
 			for (int j = 0; j < N; j++){
@@ -263,12 +265,12 @@ int main(int argc, char** argv){
 		cout << "Subtask2: Non-linear activations" << endl;
 		float outputMatrix[N][N];
 		float** d_inputMatrix;
-		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
-		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		float** d_outputMatrix;
-		cudaMalloc(&d_outputMatrix, N * N * sizeof(float));
 		dim3 threadsPerBlock(2, 2); //! Check dimensions
 		int blocksPerGrid = 1; //! Check dimensions
+		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
+		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMalloc(&d_outputMatrix, N * N * sizeof(float));
 		if (activation == 0){
 			reLU <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix);
 		}
@@ -276,6 +278,7 @@ int main(int argc, char** argv){
 			tanh <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix);
 		}
 		cudaMemcpy(outputMatrix, d_outputMatrix, N * N * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaDeviceSynchronize();
 		cout << "Output Matrix:" << endl;
 		for (int i = 0; i < N; i++){
 			for (int j = 0; j < N; j++){
@@ -306,14 +309,15 @@ int main(int argc, char** argv){
 		int outputsize = N / pool_dim;
 		float outputMatrix[outputsize][outputsize];
 		float** d_inputMatrix;
-		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
-		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		float** d_outputMatrix;
-		cudaMalloc(&d_outputMatrix, outputsize * outputsize * sizeof(float));
 		dim3 threadsPerBlock(2, 2); //! Check dimensions
 		int blocksPerGrid = 1; //! Check dimensions
+		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
+		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMalloc(&d_outputMatrix, outputsize * outputsize * sizeof(float));
 		Pool <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, pool_dim, pooltype, pool_dim);
 		cudaMemcpy(outputMatrix, d_outputMatrix, outputsize * outputsize * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaDeviceSynchronize();
 		cout << "Output Matrix:" << endl;
 		for (int i = 0; i < outputsize; i++){
 			for (int j = 0; j < outputsize; j++){
@@ -338,12 +342,12 @@ int main(int argc, char** argv){
 		cout << "Subtask4: Converting a vector" << endl;
 		float outputVector[N];
 		float* d_inputVector;
-		cudaMalloc(&d_inputVector, N * sizeof(float));
-		cudaMemcpy(d_inputVector, inputVector, N * sizeof(float), cudaMemcpyHostToDevice);
 		float* d_outputVector;
-		cudaMalloc(&d_outputVector, N * sizeof(float));
 		int threadsPerBlock = N; //! Check dimensions
 		int blocksPerGrid = 1; //! Check dimensions
+		cudaMalloc(&d_inputVector, N * sizeof(float));
+		cudaMemcpy(d_inputVector, inputVector, N * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMalloc(&d_outputVector, N * sizeof(float));
 		if (function == 0){
 			sigmoid <<<blocksPerGrid, threadsPerBlock>>> (d_inputVector, d_outputVector);
 		}
@@ -351,6 +355,7 @@ int main(int argc, char** argv){
 			softmax <<<blocksPerGrid, threadsPerBlock>>> (d_inputVector, d_outputVector);
 		}
 		cudaMemcpy(outputVector, d_outputVector, N * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaDeviceSynchronize();
 		cout << "Output Vector:" << endl;
 		for (int i = 0; i < N; i++){
 			cout << outputVector[i] << " ";
