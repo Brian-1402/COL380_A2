@@ -302,77 +302,70 @@ int main(int argc, char** argv){
 	}
 	else if (subtask == 2){
 		if (argc < 5){
-			cout << "Please provide the N, M, and P" << endl;
+			cout << "Please provide the activation function, N, M" << endl;
 			return 1;
 		}
-		int N = stoi(argv[2]);
-		int M = stoi(argv[3]);
-		int P = stoi(argv[4]);
-		if (argc < 5 + N * N + M * M){
+		int activation_fn = stoi(argv[2]);
+		int N = stoi(argv[3]);
+		int M = stoi(argv[4]);
+		if (argc < 5 + N * M){
 			cout << "Please provide the matrix and kernel" << endl;
 			return 1;
 		}
-		float inputMatrix[N * N];
-		float kernel[M * M];
+		float inputMatrix[N * M];
 		for (int i = 0; i < N; i++){
-			for (int j = 0; j < N; j++){
+			for (int j = 0; j < M; j++){
 				inputMatrix[i * N + j] = stof(argv[5 + i * N + j]);
 			}
 		}
-		for (int i = 0; i < M; i++){
-			for (int j = 0; j < M; j++){
-				kernel[i * M + j] = stof(argv[5 + N * N + i * M + j]);
-			}
-		}
-		cout << "Subtask1: Convolution" << endl;
-		float outputMatrix[N * N];
+		cout << "Subtask2: Non-linear activation" << endl;
+		string activationName = (activation_fn == 0) ? "ReLU" : "tanh";
+        cout << "Activation: " << activationName << endl;
+		float outputMatrix[N * M];
 		float* d_inputMatrix;
-		float* d_kernel;
-		float* d_paddedMatrix;
 		float* d_outputMatrix;
 		dim3 threadsPerBlock(2, 2);
 		int blocksPerGrid = 1;
-		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
-		cudaMalloc(&d_kernel, M * M * sizeof(float));
-		cudaMalloc(&d_paddedMatrix, (N + 2 * P) * (N + 2 * P) * sizeof(float));
-		cudaMalloc(&d_outputMatrix, N * N * sizeof(float));
-		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_kernel, kernel, M * M * sizeof(float), cudaMemcpyHostToDevice);
-		padMatrix <<<1, dim3(N, N)>>> (d_inputMatrix, d_paddedMatrix, N, P);
-		convolveMatrix <<<blocksPerGrid, threadsPerBlock>>> (d_paddedMatrix, d_outputMatrix, d_kernel, N + 2 * P, M, 1);
-		cudaMemcpy(outputMatrix, d_outputMatrix, N * N * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMalloc(&d_inputMatrix, N * M * sizeof(float));
+		cudaMemcpy(d_inputMatrix, inputMatrix, N * M * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMalloc(&d_outputMatrix, N * M * sizeof(float));
+		if (activation_fn == 0){
+			ReLU <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, M, N);
+		}
+		else if (activation_fn == 1){
+			tanh <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, M, N);
+		}
+		cudaMemcpy(outputMatrix, d_outputMatrix, N * M * sizeof(float), cudaMemcpyDeviceToHost);
 		cudaDeviceSynchronize();
 		cout << "Output Matrix:" << endl;
 		for (int i = 0; i < N; i++){
-			for (int j = 0; j < N; j++){
+			for (int j = 0; j < M; j++){
 				cout << outputMatrix[i * N + j] << " ";
 			}
 			cout << endl;
 		}
 		cudaFree(d_inputMatrix);
-		cudaFree(d_kernel);
-		cudaFree(d_paddedMatrix);
 		cudaFree(d_outputMatrix);
 	}
 	else if (subtask == 3){
-		if (argc < 4){
+		if (argc < 5){
 			cout << "Please provide the pooling function and N" << endl;
 			return 1;
 		}
 		int pooltype = stoi(argv[2]);
-		int N = stoi(argv[3]);
-		if (argc < 4 + N * N){
+		int pool_dim = stoi(argv[3]);
+		int N = stoi(argv[4]);
+		if (argc < 5 + N * N){
 			cout << "Please provide the matrix" << endl;
 			return 1;
 		}
 		float inputMatrix[N * N];
 		for (int i = 0; i < N; i++){
 			for (int j = 0; j < N; j++){
-				inputMatrix[i * N + j] = stof(argv[4 + i * N + j]);
+				inputMatrix[i * N + j] = stof(argv[5 + i * N + j]);
 			}
 		}
 		cout << "Subtask3: Subsampling" << endl;
-		int pool_dim = 2;
 		int outputsize = N / pool_dim;
 		float outputMatrix[outputsize * outputsize];
 		float* d_inputMatrix;
@@ -382,7 +375,7 @@ int main(int argc, char** argv){
 		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
 		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMalloc(&d_outputMatrix, outputsize * outputsize * sizeof(float));
-		Pool <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, pool_dim, pooltype, pool_dim);
+		Pool <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, pool_dim, pooltype, 1);
 		cudaMemcpy(outputMatrix, d_outputMatrix, outputsize * outputsize * sizeof(float), cudaMemcpyDeviceToHost);
 		cudaDeviceSynchronize();
 		cout << "Output Matrix:" << endl;

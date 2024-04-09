@@ -71,7 +71,7 @@ vector<vector<float>> tanH(const vector<vector<float>>& inputMatrix) {
 
 // max pooling function with stride and variable padding
 // put padding = 0 for no padding
-vector<vector<float>> maxPool(const vector<vector<float>>& inputMatrix, int stride = 0, int padding = 0) {
+vector<vector<float>> maxPool(const vector<vector<float>>& inputMatrix, int stride = 0, int padding = 0,int pool_dim = 2) {
     int inputSize = inputMatrix.size();
     int paddedSize = inputSize + 2 * padding;
     vector<vector<float>> paddedMatrix(paddedSize, vector<float>(paddedSize, 0.0f));
@@ -83,14 +83,14 @@ vector<vector<float>> maxPool(const vector<vector<float>>& inputMatrix, int stri
         }
     }
 
-    int outputSize = (paddedSize - 2) / stride + 1;
+    int outputSize = (paddedSize - pool_dim) / stride + 1;
     vector<vector<float>> outputMatrix(outputSize, vector<float>(outputSize, 0.0f));
 
     for (int i = 0; i < outputSize; i++) {
         for (int j = 0; j < outputSize; j++) {
             float maxVal = paddedMatrix[i * stride][j * stride];
-            for (int k = 0; k < 2; k++) {
-                for (int l = 0; l < 2; l++) {
+            for (int k = 0; k < pool_dim; k++) {
+                for (int l = 0; l < pool_dim; l++) {
                     maxVal = max(maxVal, paddedMatrix[i * stride + k][j * stride + l]);
                 }
             }
@@ -103,7 +103,7 @@ vector<vector<float>> maxPool(const vector<vector<float>>& inputMatrix, int stri
 
 // average pooling function with stride and variable padding
 // put padding = 0 for no padding
-vector<vector<float>> averagePool(const vector<vector<float>>& inputMatrix, int stride = 0, int padding = 0) {
+vector<vector<float>> averagePool(const vector<vector<float>>& inputMatrix, int stride = 0, int padding = 0, int pool_dim = 2) {
     int inputSize = inputMatrix.size();
     int paddedSize = inputSize + 2 * padding;
     vector<vector<float>> paddedMatrix(paddedSize, vector<float>(paddedSize, 0.0f));
@@ -115,18 +115,18 @@ vector<vector<float>> averagePool(const vector<vector<float>>& inputMatrix, int 
         }
     }
 
-    int outputSize = (paddedSize - 2) / stride + 1;
+    int outputSize = (paddedSize - pool_dim) / stride + 1;
     vector<vector<float>> outputMatrix(outputSize, vector<float>(outputSize, 0.0f));
 
     for (int i = 0; i < outputSize; i++) {
         for (int j = 0; j < outputSize; j++) {
             float sum = 0.0f;
-            for (int k = 0; k < 2; k++) {
-                for (int l = 0; l < 2; l++) {
+            for (int k = 0; k < pool_dim; k++) {
+                for (int l = 0; l < pool_dim; l++) {
                     sum += paddedMatrix[i * stride + k][j * stride + l];
                 }
             }
-            outputMatrix[i][j] = sum / 4;
+            outputMatrix[i][j] = sum / (pool_dim * pool_dim);
         }
     }
 
@@ -223,14 +223,14 @@ int main(int argc, char** argv){
         }
         int activation = stoi(argv[2]);
         int N = stoi(argv[3]);
-        // int M = stoi(argv[4]); //! No Idea why they even are giving M for this subtask -> Redundant imo
-        if (argc < 5 + N * N){
+        int M = stoi(argv[4]); //! Non square matrix apparantly
+        if (argc < 5 + N * M){
             cout << "Please provide the matrix" << endl;
             return 1;
         }
-        vector<vector<float>> input_matrix(N, vector<float>(N, 0.0f));
+        vector<vector<float>> input_matrix(N, vector<float>(M, 0.0f));
         for (int i = 0; i < N; i++){
-            for (int j = 0; j < N; j++){
+            for (int j = 0; j < M; j++){
                 input_matrix[i][j] = stof(argv[5 + i * N + j]);
             }
         }
@@ -246,27 +246,28 @@ int main(int argc, char** argv){
         }
         cout << "Result:" << endl;
         for (int i = 0; i < (int) result.size(); i++){
-            for (int j = 0; j < (int) result.size(); j++){
+            for (int j = 0; j < (int) result[0].size(); j++){
                 cout << result[i][j] << " ";
             }
             cout << endl;
         }
     }
     else if (subtask == 3){
-        if (argc < 4){
-            cout << "Please provide the pooling function (0=max pool 1=avg pool), N" << endl;
+        if (argc < 5){
+            cout << "Please provide the pooling function (0=max pool 1=avg pool),M (pool_dim), N" << endl;
             return 1;
         }
         int pooling = stoi(argv[2]);
-        int N = stoi(argv[3]);
-        if (argc < 4 + N * N){
+        int pool_dim = stoi(argv[3]);
+        int N = stoi(argv[4]);
+        if (argc < 5 + N * N){
             cout << "Please provide the matrix" << endl;
             return 1;
         }
         vector<vector<float>> input_matrix(N, vector<float>(N, 0.0f));
         for (int i = 0; i < N; i++){
             for (int j = 0; j < N; j++){
-                input_matrix[i][j] = stof(argv[4 + i * N + j]);
+                input_matrix[i][j] = stof(argv[5 + i * N + j]);
             }
         }
         cout << "Subtask 3: Subsampling" << endl;
@@ -274,10 +275,10 @@ int main(int argc, char** argv){
         cout << "Pooling: " << poolingName << endl;
         vector<vector<float>> result;
         if (pooling == 0){
-            result = maxPool(input_matrix, 2, 0);
+            result = maxPool(input_matrix, 1, 0, pool_dim);
         }
         else{
-            result = averagePool(input_matrix, 2, 0);
+            result = averagePool(input_matrix, 1, 0,pool_dim);
         }
         cout << "Result:" << endl;
         for (int i = 0; i < (int) result.size(); i++){

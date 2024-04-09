@@ -1,23 +1,32 @@
 # COL380_A2
 CUDA-parallelized CNN for recognizing MNIST digits
 
-## Todo
+## Running the code:
 
-### General
+- Subtask 1:
+  - Compile the code as follows: ```make subtask1```
+  - Run the program with necessary arguments:
+  - task of choice 1=convolution, 2=non-linear-activations, 3=subsampling, 4=converting a vector
+  - For choice 1:   
+  - ```./subtask1 1 <input_dim> <kern_dim> <pad_val> <input_matrix_entries> <kernel entries></kernel>```
+  - For choice 2: (0 - relu, 1 - tanh)
+  - ```./subtask1 2 <activation_function> <N_dim> <M_dim> <input_matrix_entries>```
+  - For choice 3: (0 - maxpool, 1 - avgpool)
+  - ```./subtask1 3 <poolfunc> <pool_size> <input_dim> <input_matrix_entries>```
+  - For choice 4: (0 - sigmoid, 1 - avgpool)
+  - ```./subtask1 4 <prob_func> <input_vector_entries>```
 
-- Read piazza and fully understand submission and directory format.
-- See how the weights are stored and how to import it.
-- See how the assignment is tested.
+- Subtask2:
+  - Compile the code as follows: ```make subtask2```
+  - Run program with nessary arguments as in subtask1
 
-### Subtask 1
+- Subtask3:
+  - Make sure to have /img directory with required images
+  - Compile the code as follows: ```make subtask3```
+  - Run program as ```./subtask3```
 
-- may have to rewrite function definitions to use arrays instead of vectors.
-- Look into fast convolution or whatever.
-
-### Subtask 2
-
-- Maybe look into shared memory optimization for convolutions and pooling.
-
-### Other possible optimizations
-- Summing, pooling, etc and other serial operations can be parallelized using [reduction kernel](https://shreeraman-ak.medium.com/parallel-reduction-with-cuda-d0ae10c1ae2c).
+- Subtask4:
+  - Make sure to have /img directory with required images
+  - Compile the code as follows: ```make subtask4```
+  - Run program as ```./subtask4 [1 - with streams, 0 - without streams]```
 
