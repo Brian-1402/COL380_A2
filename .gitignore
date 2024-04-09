@@ -17,3 +17,4 @@ compile_commands.json
 
 bin/
 img/
+pre-proc-img/
