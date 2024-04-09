@@ -193,39 +193,39 @@ void test_softmax(){
     cudaFree(d_outputVector);
 }
 
-struct dim6{
-	dim3 thread_idx; // 3D grid where i can access each subdimension as thread_idx.x etc
-	dim3 block_idx; // 2D block where i can access each subdimension as block_idx.x etc
-};
+// struct dim6{
+// 	dim3 thread_idx; // 3D grid where i can access each subdimension as thread_idx.x etc
+// 	dim3 block_idx; // 2D block where i can access each subdimension as block_idx.x etc
+// };
 
-// Given inputs 
-struct dim6 get_dim6(int subtask,int N, int M, int P, int pool_dim = 2, int stride = 1){
-	struct dim6 d;
-	// d.thread_idx.x = N;
-	// d.thread_idx.y = N;
-	// d.thread_idx.z = 1;
-	// d.block_idx.x = M;
-	// d.block_idx.y = M;
-	switch(subtask){
-		case(1):
-			// Convolution subtask
-			// N would be input matrix size, M would be kernel size, P would be padding, remaning useless
-			// Note that both input and kernel could possibly be really large so we need to make sure that after creation of threads, max number of threads per block is just 512
-			int padded_size = N + 2 * P;
-			int threads_per_block = 512;
-			int blocks_per_grid = (padded_size * padded_size) / threads_per_block;
-			d.thread_idx.x = 2;
-			d.thread_idx.y = 2;
-			d.thread_idx.z = 1;
-			d.block_idx.x = blocks_per_grid;
-			d.block_idx.y = 1;
-			d.block_idx.z = 1;
-			break;
+// // Given inputs 
+// struct dim6 get_dim6(int subtask,int N, int M, int P, int pool_dim = 2, int stride = 1){
+// 	struct dim6 d;
+// 	// d.thread_idx.x = N;
+// 	// d.thread_idx.y = N;
+// 	// d.thread_idx.z = 1;
+// 	// d.block_idx.x = M;
+// 	// d.block_idx.y = M;
+// 	switch(subtask){
+// 		case(1):
+// 			// Convolution subtask
+// 			// N would be input matrix size, M would be kernel size, P would be padding, remaning useless
+// 			// Note that both input and kernel could possibly be really large so we need to make sure that after creation of threads, max number of threads per block is just 512
+// 			int padded_size = N + 2 * P;
+// 			int threads_per_block = 512;
+// 			int blocks_per_grid = (padded_size * padded_size) / threads_per_block;
+// 			d.thread_idx.x = 2;
+// 			d.thread_idx.y = 2;
+// 			d.thread_idx.z = 1;
+// 			d.block_idx.x = blocks_per_grid;
+// 			d.block_idx.y = 1;
+// 			d.block_idx.z = 1;
+// 			break;
 
 		
-	}
-	return d;
-};
+// 	}
+// 	return d;
+// };
 
 /*Here is an exact example for subtask 1:
 
@@ -276,15 +276,15 @@ int main(int argc, char** argv){
 		float* d_kernel;
 		float* d_paddedMatrix;
 		float* d_outputMatrix;
-		dim3 threadsPerBlock(2, 2);
-		int blocksPerGrid = 1;
+		dim3 threadsPerBlock(16,16);
+		dim3 blocksPerGrid(4,2);
 		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
 		cudaMalloc(&d_kernel, M * M * sizeof(float));
 		cudaMalloc(&d_paddedMatrix, (N + 2 * P) * (N + 2 * P) * sizeof(float));
 		cudaMalloc(&d_outputMatrix, N * N * sizeof(float));
 		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMemcpy(d_kernel, kernel, M * M * sizeof(float), cudaMemcpyHostToDevice);
-		padMatrix <<<1, dim3(N, N)>>> (d_inputMatrix, d_paddedMatrix, N, P);
+		padMatrix <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_paddedMatrix, N, P);
 		convolveMatrix <<<blocksPerGrid, threadsPerBlock>>> (d_paddedMatrix, d_outputMatrix, d_kernel, N + 2 * P, M, 1);
 		cudaMemcpy(outputMatrix, d_outputMatrix, N * N * sizeof(float), cudaMemcpyDeviceToHost);
 		cudaDeviceSynchronize();
@@ -324,8 +324,8 @@ int main(int argc, char** argv){
 		float outputMatrix[N * M];
 		float* d_inputMatrix;
 		float* d_outputMatrix;
-		dim3 threadsPerBlock(2, 2);
-		int blocksPerGrid = 1;
+		dim3 threadsPerBlock(16,16);
+		dim3 blocksPerGrid(4,2);
 		cudaMalloc(&d_inputMatrix, N * M * sizeof(float));
 		cudaMemcpy(d_inputMatrix, inputMatrix, N * M * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMalloc(&d_outputMatrix, N * M * sizeof(float));
@@ -370,8 +370,8 @@ int main(int argc, char** argv){
 		float outputMatrix[outputsize * outputsize];
 		float* d_inputMatrix;
 		float* d_outputMatrix;
-		dim3 threadsPerBlock(2, 2);
-		int blocksPerGrid = 1;
+		dim3 threadsPerBlock(16,16);
+		dim3 blocksPerGrid(4,2);
 		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
 		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMalloc(&d_outputMatrix, outputsize * outputsize * sizeof(float));
@@ -403,8 +403,8 @@ int main(int argc, char** argv){
 		float outputVector[N];
 		float* d_inputVector;
 		float* d_outputVector;
-		int threadsPerBlock = N;
-		int blocksPerGrid = 1;
+		int threadsPerBlock = 256;
+		int blocksPerGrid = N/256;
 		cudaMalloc(&d_inputVector, N * sizeof(float));
 		cudaMemcpy(d_inputVector, inputVector, N * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMalloc(&d_outputVector, N * sizeof(float));
