@@ -111,13 +111,16 @@ void makeKernel(vector<float>& data, float*& d_kernel, int* dim) {
     float* kernel = new float[totalSize];
 
     int index = 0;
+	// cout << "Kernel: " << endl;
     for (int i = 0; i < dim[NUM_FILTERS]; ++i) {
         for (int j = 0; j < dim[NUM_CHANNELS]; ++j) {
             for (int k = 0; k < dim[KERNEL_DIM]; ++k) {
                 for (int l = 0; l < dim[KERNEL_DIM]; ++l) {
                     int idx = (((i * dim[NUM_CHANNELS] + j) * dim[KERNEL_DIM] + k) * dim[KERNEL_DIM]) + l;
                     kernel[idx] = data[index++];
+					// cout << kernel[idx] << " ";
                 }
+				// cout << endl;
             }
         }
     }
@@ -131,6 +134,12 @@ void makeKernel(vector<float>& data, float*& d_kernel, int* dim) {
 
 // dim has 3 elements: (filters, channels, kernel_dim) 
 void makeBias(std::vector<float>& data, float*& d_bias, int* dim) {
+	// print the bias vector
+	// cout << "Bias: " << endl;
+	// for (int i = 0; i < dim[NUM_FILTERS]; ++i) {
+	// 	cout << data[data.size() - dim[NUM_FILTERS] + i] << " ";
+	// }
+	// cout << endl;
     cudaMalloc(&d_bias, dim[NUM_FILTERS] * sizeof(float));
     cudaMemcpy(d_bias, &data[data.size() - dim[NUM_FILTERS]], dim[NUM_FILTERS] * sizeof(float), cudaMemcpyHostToDevice);
     cudaDeviceSynchronize();
@@ -142,12 +151,16 @@ void makeInput(vector<float>& data, float*& d_input, int* dim) {
     float* input = new float[totalSize];
 
     int index = 0;
+	//ALso print input image for checking
+	// cout << "Input image: " << endl;
     for (int k = 0; k < dim[0]; ++k) {
         for (int i = 0; i < dim[1]; ++i) {
             for (int j = 0; j < dim[2]; ++j) {
                 int idx = (k * dim[1] + i) * dim[2] + j;
                 input[idx] = data[index++];
+				// cout << input[idx] << " ";
             }
+			// cout << endl;
         }
     }
 
@@ -207,31 +220,59 @@ struct weights_struct prep_weights() {
 	std::vector<float> data;
 	readFile(data, "./weights/conv1.txt");
 	int dim[3] = {20, 1, 5};
+	// cout << "Conv1: " << endl;
 	makeKernel(data, weights.conv1_kernel, dim);
+	// cout << "Bias1: " << endl;
 	makeBias(data, weights.conv1_bias, dim);
 	readFile(data, "./weights/conv2.txt");
 	dim[0] = 50;
 	dim[1] = 20;
 	dim[2] = 5;
+	// cout << "Conv2: " << endl;
 	makeKernel(data, weights.conv2_kernel, dim);
+	// cout << "Bias2: " << endl;
 	makeBias(data, weights.conv2_bias, dim);
 	readFile(data, "./weights/fc1.txt");
 	dim[0] = 500;
 	dim[1] = 50;
 	dim[2] = 4;
+	// cout << "FC1: " << endl;
 	makeKernel(data, weights.fc1_kernel, dim);
+	// cout << "Bias3: " << endl;
 	makeBias(data, weights.fc1_bias, dim);
 	readFile(data, "./weights/fc2.txt");
 	dim[0] = 10;
 	dim[1] = 500;
 	dim[2] = 1;
+	// cout << "FC2: " << endl;
 	makeKernel(data, weights.fc2_kernel, dim);
+	// cout << "Bias4: " << endl;
 	makeBias(data, weights.fc2_bias, dim);
 	return weights;
 }
 
+
+// Helper functions for debugging
+void printVector(float* vector, int size) {
+    for (int i = 0; i < size; i++) {
+        cout << vector[i] << " ";
+    }
+    cout << endl;
+}
+
+void printMatrix(float* matrix, int rows, int cols) {
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            cout << matrix[i * cols + j] << " ";
+        }
+        cout << endl;
+    }
+}
+
 //Requires arguments to already be in CUDA memory
 void forward_prop(float *inputImage, float *outputVector, weights_struct weights, cudaStream_t stream){
+	cout << "Forward prop" << endl;
+
 	float * c1_out, * p1_out, * c2_out, * p2_out, * fc1_out, *fc1_relu_out, * fc2_out, * fc2_softmax_out;
 	// dimensions: (height, width, output_channels)
 	cudaMalloc(&c1_out, 24 * 24 * 20 * sizeof(float));
@@ -244,6 +285,19 @@ void forward_prop(float *inputImage, float *outputVector, weights_struct weights
 	// cudaMalloc(&fc2_softmax_out, 1 * 1 * 10 * sizeof(float));
 	// C1: 45 blocks, 256 threads per block
 	convLayer<<<dim3(3,3,5), dim3(8,8,4), 0, stream>>>(inputImage, c1_out, weights.conv1_kernel, weights.conv1_bias, 5, 1, 28, 28, 20, 1);
+	
+	// debugging print statements (c1_out is in device so need to copy to host to print)
+	float* host_c1_out = new float[24 * 24 * 20];
+	cudaMemcpy(host_c1_out, c1_out, 24 * 24 * 20 * sizeof(float), cudaMemcpyDeviceToHost);
+	cout << "C1: " << endl;
+	for (int i = 0; i < 24; i++){
+		for (int j = 0; j < 24; j++){
+			cout << host_c1_out[i * 24 + j] << " ";
+		}
+		cout << endl;
+	}
+
+
 	// P1: 16 blocks, 180 threads per block
 	pool<<<dim3(2,2,4), dim3(6,6,5), 0, stream>>>(c1_out, p1_out, 24, 24, 20, 2, MAXPOOL, 2);
 	// C2: 20 blocks, 160 threads per block
@@ -278,10 +332,17 @@ int main() {
 	for (const auto& dirEntry : std::filesystem::recursive_directory_iterator("./pre-proc-img/")){
 		images.push_back(dirEntry.path().string());
 	}
-	cout << images[0] << endl;
+	// cout << images[0] << endl;
 	//iterate through images
 	// for (int i = 0; i < images.size(); i++){
 		float* inputImage = prep_inputs(images[0]);
+		//printing input image
+		// for (int i = 0; i < 28; i++){
+		// 	for (int j = 0; j < 28; j++){
+		// 		cout << inputImage[i * 28 + j] << " ";
+		// 	}
+		// 	cout << endl;
+		// }
 		float* outputVector;
 		float* host_outputVector = new float[10];
 
@@ -296,7 +357,7 @@ int main() {
 		cudaDeviceSynchronize();
 
 		// print along the 3rd index
-		for (int i = 0; i < 20; i++){
+		for (int i = 0; i < 10; i++){
 			cout << host_outputVector[i] << endl;
 		}
 		delete[] host_outputVector;
