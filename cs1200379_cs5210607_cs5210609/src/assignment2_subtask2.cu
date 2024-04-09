@@ -69,38 +69,38 @@ __global__ void softmax_sum_div(float* outputVector, float sum, int size) {
 
 // Can speed up by using shared memory 
 //^ Note: Expects inputMatrix to be the padded input matrix
-__global__ void Pool(float* inputMatrix, float* outputMatrix, int width, int pooltype, int pooldim = 2, int stride = 1) {
+__global__ void Pool(float* inputMatrix, float* outputMatrix, int in_width, int out_width, int pooltype, int pooldim = 2, int stride = 1) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     float val = 0.0f;
-    if (i < width/pooldim && j < width/pooldim) {
+    if (i < in_width/pooldim && j < in_width/pooldim) {
         if (pooltype == MAXPOOL)
-            val = inputMatrix[(i * stride * width) + (j * stride)];
+            val = inputMatrix[(i * stride * in_width) + (j * stride)];
 
         for (int k = 0; k < pooldim; k++)
             for (int l = 0; l < pooldim; l++)
                 if (pooltype == MAXPOOL)
-                    val = max(val, inputMatrix[((i * stride + k) * width) + (j * stride + l)]);
+                    val = max(val, inputMatrix[((i * stride + k) * in_width) + (j * stride + l)]);
                 else if (pooltype == AVGPOOL)
-                    val += inputMatrix[((i * stride + k) * width) + (j * stride + l)];
+                    val += inputMatrix[((i * stride + k) * in_width) + (j * stride + l)];
 
         if (pooltype == AVGPOOL)
             val = val / (pooldim * pooldim);
-        outputMatrix[i * width + j] = val;
+        outputMatrix[i * out_width + j] = val;
     }
 }
 
 // Can speed up using shared memory
 //^ Note: Expects inputMatrix to be the padded input matrix
-__global__ void convolveMatrix(float* inputMatrix, float* outputMatrix, float* kernel, int width, int kernel_size, int stride = 1) {
+__global__ void convolveMatrix(float* inputMatrix, float* outputMatrix, float* kernel, int in_width, int out_width, int kernel_size, int stride = 1) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     float val = 0.0f;
-    if (i < width/kernel_size && j < width/kernel_size) {
+    if (i < in_width/kernel_size && j < in_width/kernel_size) {
         for (int k = 0; k < kernel_size; k++)
             for (int l = 0; l < kernel_size; l++)
-                val += inputMatrix[(i * stride + k) * width + (j * stride + l)] * kernel[k * kernel_size + l];
-        outputMatrix[i * width + j] = val;
+                val += inputMatrix[(i * stride + k) * in_width + (j * stride + l)] * kernel[k * kernel_size + l];
+        outputMatrix[i * out_width + j] = val;
     }
 }
 
@@ -285,7 +285,7 @@ int main(int argc, char** argv){
 		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMemcpy(d_kernel, kernel, M * M * sizeof(float), cudaMemcpyHostToDevice);
 		padMatrix <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_paddedMatrix, N, P);
-		convolveMatrix <<<blocksPerGrid, threadsPerBlock>>> (d_paddedMatrix, d_outputMatrix, d_kernel, N + 2 * P, M, 1);
+		convolveMatrix <<<blocksPerGrid, threadsPerBlock>>> (d_paddedMatrix, d_outputMatrix, d_kernel, N + 2 * P, N, M, 1);
 		cudaMemcpy(outputMatrix, d_outputMatrix, N * N * sizeof(float), cudaMemcpyDeviceToHost);
 		cudaDeviceSynchronize();
 		cout << "Output Matrix:" << endl;
@@ -375,7 +375,7 @@ int main(int argc, char** argv){
 		cudaMalloc(&d_inputMatrix, N * N * sizeof(float));
 		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMalloc(&d_outputMatrix, outputsize * outputsize * sizeof(float));
-		Pool <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, pool_dim, pooltype, 1);
+		Pool <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix, N, outputsize, pooltype, pool_dim, 1);
 		cudaMemcpy(outputMatrix, d_outputMatrix, outputsize * outputsize * sizeof(float), cudaMemcpyDeviceToHost);
 		cudaDeviceSynchronize();
 		cout << "Output Matrix:" << endl;
