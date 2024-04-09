@@ -53,7 +53,7 @@ __global__ void FCLayer1D(float* inputMatrix, float* outputMatrix, float* kernel
 }
 
 
-__global__ void pool(float* inputMatrix, float* outputMatrix, int channels, int in_height, int in_width, int out_height, int out_width,int pooldim, int pooltype, int stride = 1) {
+__global__ void pool(float* inputMatrix, float* outputMatrix, int channels, int in_height, int in_width, int out_height, int out_width, int pooldim, int pooltype, int stride = 1) {
 	int k = blockIdx.x * blockDim.x + threadIdx.x; // channel of output image
 	int i = blockIdx.y * blockDim.y + threadIdx.y; // height of output image
 	int j = blockIdx.z * blockDim.z + threadIdx.z; // width of output image
@@ -261,8 +261,8 @@ void forward_prop(float *inputImage, float *outputVector, weights_struct weights
 	// cout << "P1 done" << endl;
 	// printCUDAMatrix(p1_out, 20, 12, 12);
 
-	// C2: 20 blocks, 160 threads per block
-	convLayer<<<dim3(5,2,2), dim3(10,4,4), 0, stream>>>(p1_out, c2_out, weights.conv1_kernel, weights.conv1_bias, 5, 20, 12, 12, 8, 8, 50, 1);
+	// C2: 10 blocks, 320 threads per block
+	convLayer<<<dim3(5,2,1), dim3(10,4,8), 0, stream>>>(p1_out, c2_out, weights.conv1_kernel, weights.conv1_bias, 5, 20, 12, 12, 8, 8, 50, 1);
 	// cout << "C2 done" << endl;
 	// printCUDAMatrix(c2_out, 50, 8, 8);
 
@@ -278,14 +278,14 @@ void forward_prop(float *inputImage, float *outputVector, weights_struct weights
 
 	// Relu1: 4 blocks, 125 threads per block
 	ReLU<<<dim3(4,1,1), dim3(125,1,1), 0, stream>>>(fc1_out, fc1_relu_out, 500);
-	cout << "ReLU done" << endl;
-	printCUDAVector(fc1_relu_out, 500);
+	// cout << "ReLU done" << endl;
+	// printCUDAVector(fc1_relu_out, 500);
 
 	// FC2: 4 block, 125 threads per block
 	// Here, x axis is input channels
 	FCLayer1D<<<dim3(4,1,1), dim3(125,1,1), 0, stream>>>(fc1_relu_out, fc2_out, weights.fc2_kernel, weights.fc2_bias, 1, 500, 1, 1, 1, 1, 10, 1);
-	cout << "FC2 done" << endl;
-	printCUDAVector(fc2_out, 10);
+	// cout << "FC2 done" << endl;
+	// printCUDAVector(fc2_out, 10);
 
 	// Softmax: 1 block, 10 threads per block
 	softmax<<<dim3(1,1,1), dim3(10,1,1), 0, stream>>>(fc2_out, outputVector, 10); //! This would have to be changed
@@ -347,9 +347,11 @@ int main() {
 	}
 	//iterate through images
 	// for (int i = 0; i < images.size(); i++){
-	for (int i = 0; i < 2; i++){
-		// cout << "Image path: " << images[i] << endl;
+	for (int i = 0; i < 1; i++){
+		cout << "Image path: " << images[i] << endl;
 		int label = stoi(images[i].substr(25, 1));
+		string filename = images[i].substr(15, images[i].length() - 15);
+		// cout << "Filename: " << filename << endl;
 
 		float* inputImage = prep_inputs(images[i]);
 		// cout << "Input image: " << endl;
@@ -370,8 +372,27 @@ int main() {
 
 		printVector(host_outputVector, 10);
 		int pred = argmax(host_outputVector, 10);
-		cout << "Label: " << label << "; ";
-		cout << "Predicted: " << pred << endl;
+		vector<int> sorted_indices2 = sorted_indices(host_outputVector, 10);
+
+		// cout << "Label: " << label << "; ";
+		// cout << "Predicted: " << pred << endl;
+
+		std::string directory = "./output/";
+		std::string out_filename = directory + filename;
+
+		std::ofstream outputFile(filename);
+		if (!outputFile.is_open()) {
+			std::cerr << "Error opening the file." << std::endl;
+			return 1;
+		}
+
+		// Write each element of the array to the file
+		for (int i = 0; i < 5; ++i) {
+			outputFile << sorted_indices2[i] << std::endl;
+		}
+
+		// Close the file
+		outputFile.close();
 
 		delete[] host_outputVector;
 		cudaFree(inputImage);
