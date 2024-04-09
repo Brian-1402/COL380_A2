@@ -346,8 +346,8 @@ int main() {
 		images.push_back(dirEntry.path().string());
 	}
 	//iterate through images
-	// for (int i = 0; i < images.size(); i++){
-	for (int i = 0; i < 1; i++){
+	for (int i = 0; i < images.size(); i++){
+	// for (int i = 0; i < 1; i++){
 		cout << "Image path: " << images[i] << endl;
 		int label = stoi(images[i].substr(25, 1));
 		string filename = images[i].substr(15, images[i].length() - 15);
