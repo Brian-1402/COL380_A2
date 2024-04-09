@@ -17,9 +17,9 @@ using namespace std;
 // 3) kernel row
 // 4) kernel column
 __global__ void convLayer(float* inputMatrix, float* outputMatrix, float* kernel, float* bias, int kernel_size, int input_channels, int height, int width, int output_channels, int stride = 1) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x; // height of output image
-    int j = blockIdx.y * blockDim.y + threadIdx.y; // width of output image
-    int k = blockIdx.z * blockDim.z + threadIdx.z; // channel of output image
+    int k = blockIdx.x * blockDim.x + threadIdx.x; // channel of output image
+    int i = blockIdx.y * blockDim.y + threadIdx.y; // height of output image
+    int j = blockIdx.z * blockDim.z + threadIdx.z; // width of output image
     float val = 0.0f;
 
     if (i < height && j < width && k < output_channels) {
@@ -34,21 +34,22 @@ __global__ void convLayer(float* inputMatrix, float* outputMatrix, float* kernel
 
 
 __global__ void pool(float* inputMatrix, float* outputMatrix, int height, int width, int channels, int pooldim, int pooltype, int stride = 1) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x; // height of output image
-    int j = blockIdx.y * blockDim.y + threadIdx.y; // width of output image
-    int k = blockIdx.z * blockDim.z + threadIdx.z; // channel of output image
-    float val = 0.0f;
+    int k = blockIdx.x * blockDim.x + threadIdx.x; // channel of output image
+    int i = blockIdx.y * blockDim.y + threadIdx.y; // height of output image
+    int j = blockIdx.z * blockDim.z + threadIdx.z; // width of output image
 
     if (i < height && j < width && k < channels) {
+		float val = 0.0f;
         if (pooltype == MAXPOOL)
             val = inputMatrix[(k * height + i * stride) * width + j * stride];
 
-        for (int b = 0; b < pooldim; b++)
-            for (int c = 0; c < pooldim; c++)
-                if (pooltype == MAXPOOL)
-                    val = max(val, inputMatrix[(k * height + i * stride + b) * width + j * stride + c]);
-                else if (pooltype == AVGPOOL)
-                    val += inputMatrix[(k * height + i * stride + b) * width + j * stride + c];
+        for (int b = 0; b < pooldim; b++) // height
+            for (int c = 0; c < pooldim; c++) { // width
+				if (pooltype == MAXPOOL)
+					val = max(val, inputMatrix[(k * height + i * stride + b) * width + j * stride + c]);
+				else if (pooltype == AVGPOOL)
+					val += inputMatrix[(k * height + i * stride + b) * width + j * stride + c];
+			}
 
         if (pooltype == AVGPOOL)
             val = val / (pooldim * pooldim);
@@ -59,13 +60,12 @@ __global__ void pool(float* inputMatrix, float* outputMatrix, int height, int wi
 
 
 __global__ void padMatrix(float* inputMatrix, float* outputMatrix, int height, int width, int channels, int padding) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x; // height of input image
-    int j = blockIdx.y * blockDim.y + threadIdx.y; // width of input image
-    int k = blockIdx.z * blockDim.z + threadIdx.z; // channel of input image
+    int k = blockIdx.x * blockDim.x + threadIdx.x; // channel of output image
+    int i = blockIdx.y * blockDim.y + threadIdx.y; // height of output image
+    int j = blockIdx.z * blockDim.z + threadIdx.z; // width of output image
 
-    if (i < height && j < width && k < channels) {
+    if (i < height && j < width && k < channels)
         outputMatrix[(k * (height + 2 * padding) + i + padding) * (width + 2 * padding) + j + padding] = inputMatrix[(k * height + i) * width + j];
-    }
 }
 
 
@@ -73,25 +73,24 @@ __global__ void padMatrix(float* inputMatrix, float* outputMatrix, int height, i
 __global__ void ReLU(float* inputMatrix, float* outputMatrix, int size) {
     int k = blockIdx.x * blockDim.x + threadIdx.x; // index in the flattened array
 
-    if (k < size) {
+    if (k < size)
         outputMatrix[k] = max(0.0f, inputMatrix[k]);
-    }
 }
 
 //! softmax value of each element of the vector
 __global__ void softmax(float* inputVector, float* outputVector, int size) {
-    int k = blockIdx.x * blockDim.x + threadIdx.x; // index in the flattened array
+    // int k = blockIdx.x * blockDim.x + threadIdx.x; // index in the flattened array
+	int k = threadIdx.x; // Only made to run in one block
 
-    if (k < size) {
+    if (k < size)
         outputVector[k] = exp(inputVector[k]);
-    }
 
     __syncthreads();
 
     // The below code forces a serial computation onto just 1 thread and makes the others wait
     // More efficient way to do this is to use a reduction kernel, or split into two parts
     __shared__ float sum;
-    if(threadIdx.x == 0) {
+    if(k == 0) {
         sum = 0;
         for(int j = 0; j < size; j++)
             sum += outputVector[j];
@@ -102,104 +101,32 @@ __global__ void softmax(float* inputVector, float* outputVector, int size) {
 }
 
 
-#define NUM_FILTERS 0
-#define NUM_CHANNELS 1
-#define KERNEL_DIM 2
+//Memory copying functions
 
-void makeKernel(vector<float>& data, float*& d_kernel, int* dim) {
-    int totalSize = dim[NUM_FILTERS] * dim[NUM_CHANNELS] * dim[KERNEL_DIM] * dim[KERNEL_DIM];
-    float* kernel = new float[totalSize];
-
-    int index = 0;
-	// cout << "Kernel: " << endl;
-    for (int i = 0; i < dim[NUM_FILTERS]; ++i) {
-        for (int j = 0; j < dim[NUM_CHANNELS]; ++j) {
-            for (int k = 0; k < dim[KERNEL_DIM]; ++k) {
-                for (int l = 0; l < dim[KERNEL_DIM]; ++l) {
-                    int idx = (((i * dim[NUM_CHANNELS] + j) * dim[KERNEL_DIM] + k) * dim[KERNEL_DIM]) + l;
-                    kernel[idx] = data[index++];
-					// cout << kernel[idx] << " ";
-                }
-				// cout << endl;
-            }
-        }
-    }
-
-    cudaMalloc(&d_kernel, totalSize * sizeof(float));
-    cudaMemcpy(d_kernel, kernel, totalSize * sizeof(float), cudaMemcpyHostToDevice);
-    cudaDeviceSynchronize();
-
-    delete[] kernel;
-}
-
-// dim has 3 elements: (filters, channels, kernel_dim) 
-void makeBias(std::vector<float>& data, float*& d_bias, int* dim) {
-	// print the bias vector
-	// cout << "Bias: " << endl;
-	// for (int i = 0; i < dim[NUM_FILTERS]; ++i) {
-	// 	cout << data[data.size() - dim[NUM_FILTERS] + i] << " ";
-	// }
-	// cout << endl;
-    cudaMalloc(&d_bias, dim[NUM_FILTERS] * sizeof(float));
-    cudaMemcpy(d_bias, &data[data.size() - dim[NUM_FILTERS]], dim[NUM_FILTERS] * sizeof(float), cudaMemcpyHostToDevice);
-    cudaDeviceSynchronize();
-}
-
-// dim has 3 elements: (channels, height, width) [in our case height = width = 28]
-void makeInput(vector<float>& data, float*& d_input, int* dim) {
-    int totalSize = dim[0] * dim[1] * dim[2];
-    float* input = new float[totalSize];
-
-    int index = 0;
-	//ALso print input image for checking
-	// cout << "Input image: " << endl;
-    for (int k = 0; k < dim[0]; ++k) {
-        for (int i = 0; i < dim[1]; ++i) {
-            for (int j = 0; j < dim[2]; ++j) {
-                int idx = (k * dim[1] + i) * dim[2] + j;
-                input[idx] = data[index++];
-				// cout << input[idx] << " ";
-            }
-			// cout << endl;
-        }
-    }
-
-    cudaMalloc(&d_input, totalSize * sizeof(float));
-    cudaMemcpy(d_input, input, totalSize * sizeof(float), cudaMemcpyHostToDevice);
-    cudaDeviceSynchronize();
-
-    delete[] input;
-}
-/*
-
-// Usage of the read functions
-int main() {
-	std::vector<float> data;
-	readFile(data, "conv1.txt");
-
-	float**** kernel;
-	to4D(data, kernel);
-
-	float* bias;
-	to1D(data, bias);
-}
-
-*/
 void readFile(std::vector<float>& data, const std::string& filename) {
 	std::ifstream file(filename);
 	float value;
-	while (file >> value) {
+	while (file >> value)
 		data.push_back(value);
-	}
+}
+
+void makeCUDAMatrix(vector<float> data, float*& d_matrix, int totalSize) {
+    cudaMalloc(&d_matrix, totalSize * sizeof(float));
+    cudaMemcpy(d_matrix, data.data(), totalSize * sizeof(float), cudaMemcpyHostToDevice);
+}
+
+void makeBias(std::vector<float> data, float*& d_bias, int totalSize) {
+    cudaMalloc(&d_bias, totalSize * sizeof(float));
+    cudaMemcpy(d_bias, &data[data.size() - totalSize], totalSize * sizeof(float), cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
 }
 
 float* prep_inputs(string filename){
-    // Read input data
+	cout << "Reading input data" << endl;
     std::vector<float> data;
     readFile(data, filename);
-    int dim[3] = {1, 28, 28};
     float* d_input;
-    makeInput(data, d_input, dim);
+    makeCUDAMatrix(data, d_input, 1 * 28 * 28);
     return d_input;
 }
 
@@ -216,103 +143,115 @@ struct weights_struct {
 
 // kernel dim: (filters, channels, kernel_dim)
 struct weights_struct prep_weights() {
+	cout << "Reading weights" << endl;
 	weights_struct weights;
 	std::vector<float> data;
-	readFile(data, "./weights/conv1.txt");
-	int dim[3] = {20, 1, 5};
+	
 	// cout << "Conv1: " << endl;
-	makeKernel(data, weights.conv1_kernel, dim);
-	// cout << "Bias1: " << endl;
-	makeBias(data, weights.conv1_bias, dim);
-	readFile(data, "./weights/conv2.txt");
-	dim[0] = 50;
-	dim[1] = 20;
-	dim[2] = 5;
+	readFile(data, "./weights/conv1.txt");
+	makeCUDAMatrix(data, weights.conv1_kernel, 20 * 1 * 5 * 5);
+	makeBias(data, weights.conv1_bias, 20);
+
 	// cout << "Conv2: " << endl;
-	makeKernel(data, weights.conv2_kernel, dim);
-	// cout << "Bias2: " << endl;
-	makeBias(data, weights.conv2_bias, dim);
-	readFile(data, "./weights/fc1.txt");
-	dim[0] = 500;
-	dim[1] = 50;
-	dim[2] = 4;
+	readFile(data, "./weights/conv2.txt");
+	makeCUDAMatrix(data, weights.conv2_kernel, 50 * 20 * 5 * 5);
+	makeBias(data, weights.conv2_bias, 50);
+
 	// cout << "FC1: " << endl;
-	makeKernel(data, weights.fc1_kernel, dim);
-	// cout << "Bias3: " << endl;
-	makeBias(data, weights.fc1_bias, dim);
-	readFile(data, "./weights/fc2.txt");
-	dim[0] = 10;
-	dim[1] = 500;
-	dim[2] = 1;
+	readFile(data, "./weights/fc1.txt");
+	makeCUDAMatrix(data, weights.fc1_kernel, 500 * 50 * 4 * 4);
+	makeBias(data, weights.fc1_bias, 500);
+
 	// cout << "FC2: " << endl;
-	makeKernel(data, weights.fc2_kernel, dim);
-	// cout << "Bias4: " << endl;
-	makeBias(data, weights.fc2_bias, dim);
+	readFile(data, "./weights/fc2.txt");
+	makeCUDAMatrix(data, weights.fc2_kernel, 10 * 500 * 1 * 1);
+	makeBias(data, weights.fc2_bias, 10);
+	// cout << "Done reading weights" << endl;
 	return weights;
 }
 
 
 // Helper functions for debugging
 void printVector(float* vector, int size) {
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++)
         cout << vector[i] << " ";
-    }
     cout << endl;
 }
 
-void printMatrix(float* matrix, int rows, int cols) {
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            cout << matrix[i * cols + j] << " ";
-        }
-        cout << endl;
-    }
+void print3DMatrix(float* matrix, int channels, int rows, int cols) {
+	for (int k = 0; k < channels; k++){
+		for (int i = 0; i < rows; i++) {
+			for (int j = 0; j < cols; j++)
+				cout << matrix[(k * rows + i) * cols + j ] << " ";
+			cout << endl;
+		}
+		cout << "-----------------------------------" << endl;
+	}
+	cout << "\n\n" << endl;
+}
+
+void printCUDAMatrix(float* matrix, int channels, int rows, int cols) {
+	float* host_matrix = new float[channels * rows * cols];
+	cudaMemcpy(host_matrix, matrix, channels * rows * cols * sizeof(float), cudaMemcpyDeviceToHost);
+	print3DMatrix(host_matrix, rows, cols, channels);
+	delete[] host_matrix;
 }
 
 //Requires arguments to already be in CUDA memory
 void forward_prop(float *inputImage, float *outputVector, weights_struct weights, cudaStream_t stream){
 	cout << "Forward prop" << endl;
 
-	float * c1_out, * p1_out, * c2_out, * p2_out, * fc1_out, *fc1_relu_out, * fc2_out, * fc2_softmax_out;
-	// dimensions: (height, width, output_channels)
-	cudaMalloc(&c1_out, 24 * 24 * 20 * sizeof(float));
-	cudaMalloc(&p1_out, 12 * 12 * 20 * sizeof(float));
-	cudaMalloc(&c2_out, 8 * 8 * 50 * sizeof(float));
-	cudaMalloc(&p2_out, 4 * 4 * 50 * sizeof(float));
-	cudaMalloc(&fc1_out, 1 * 1 * 500 * sizeof(float));
-	cudaMalloc(&fc1_relu_out, 1 * 1 * 500 * sizeof(float));
-	cudaMalloc(&fc2_out, 1 * 1 * 10 * sizeof(float));
-	// cudaMalloc(&fc2_softmax_out, 1 * 1 * 10 * sizeof(float));
+	float * c1_out, * p1_out, * c2_out, * p2_out, * fc1_out, *fc1_relu_out, * fc2_out;
+	// dimensions: (output_channels, height, width)
+	cudaMalloc(&c1_out, 20 * 24 * 24 * sizeof(float));
+	cudaMalloc(&p1_out, 20 * 12 * 12 * sizeof(float));
+	cudaMalloc(&c2_out, 50 * 8 * 8 * sizeof(float));
+	cudaMalloc(&p2_out, 50 * 4 * 4 * sizeof(float));
+	cudaMalloc(&fc1_out, 500 * 1 * 1 * sizeof(float));
+	cudaMalloc(&fc1_relu_out, 500 * 1 * 1 * sizeof(float));
+	cudaMalloc(&fc2_out, 10 * 1 * 1 * sizeof(float));
+
 	// C1: 45 blocks, 256 threads per block
-	convLayer<<<dim3(3,3,5), dim3(8,8,4), 0, stream>>>(inputImage, c1_out, weights.conv1_kernel, weights.conv1_bias, 5, 1, 28, 28, 20, 1);
+	convLayer<<<dim3(5,3,3), dim3(4,8,8), 0, stream>>>(inputImage, c1_out, weights.conv1_kernel, weights.conv1_bias, 5, 1, 28, 28, 20, 1);
+	// cout << "C1 done" << endl;
+	// printCUDAMatrix(c1_out, 20, 24, 24);
 	
-	// debugging print statements (c1_out is in device so need to copy to host to print)
-	float* host_c1_out = new float[24 * 24 * 20];
-	cudaMemcpy(host_c1_out, c1_out, 24 * 24 * 20 * sizeof(float), cudaMemcpyDeviceToHost);
-	cout << "C1: " << endl;
-	for (int i = 0; i < 24; i++){
-		for (int j = 0; j < 24; j++){
-			cout << host_c1_out[i * 24 + j] << " ";
-		}
-		cout << endl;
-	}
-
-
 	// P1: 16 blocks, 180 threads per block
-	pool<<<dim3(2,2,4), dim3(6,6,5), 0, stream>>>(c1_out, p1_out, 24, 24, 20, 2, MAXPOOL, 2);
+	pool<<<dim3(4,2,2), dim3(5,6,6), 0, stream>>>(c1_out, p1_out, 24, 24, 20, 2, MAXPOOL, 2);
+	// cout << "P1 done" << endl;
+	// printCUDAMatrix(p1_out, 20, 12, 12);
+
 	// C2: 20 blocks, 160 threads per block
-	convLayer<<<dim3(2,2,5), dim3(4,4,10), 0, stream>>>(p1_out, c2_out, weights.conv1_kernel, weights.conv1_bias, 5, 1, 12, 12, 50, 1);
+	convLayer<<<dim3(5,2,2), dim3(10,4,4), 0, stream>>>(p1_out, c2_out, weights.conv1_kernel, weights.conv1_bias, 5, 1, 12, 12, 50, 1);
+	// cout << "C2 done" << endl;
+	// printCUDAMatrix(c2_out, 50, 8, 8);
+
 	// P2: 5 blocks, 160 threads per block
-	pool<<<dim3(1,1,5), dim3(4,4,10), 0, stream>>>(c2_out, p2_out, 8, 8, 50, 2, MAXPOOL, 2);
+	pool<<<dim3(5,1,1), dim3(10,4,4), 0, stream>>>(c2_out, p2_out, 8, 8, 50, 2, MAXPOOL, 2);
+	// cout << "P2 done" << endl;
+	// printCUDAMatrix(p2_out, 50, 4, 4);
+
 	// FC1: 4 blocks, 125 threads per block
-	convLayer<<<dim3(1,1,4), dim3(1,1,125), 0, stream>>>(p2_out, fc1_out, weights.fc1_kernel, weights.fc1_bias, 4, 1, 4, 4, 500, 1);
+	convLayer<<<dim3(4,1,1), dim3(125,1,1), 0, stream>>>(p2_out, fc1_out, weights.fc1_kernel, weights.fc1_bias, 4, 1, 4, 4, 500, 1);
+	// cout << "FC1 done" << endl;
+	// printCUDAMatrix(fc1_out, 500, 1, 1);
+
 	// Relu1: 4 blocks, 125 threads per block
-	ReLU<<<dim3(1,1,4), dim3(1,1,125), 0, stream>>>(fc1_out, fc1_relu_out, 500);
+	ReLU<<<dim3(4,1,1), dim3(125,1,1), 0, stream>>>(fc1_out, fc1_relu_out, 500);
+	// cout << "ReLU done" << endl;
+	// printVector(fc1_relu_out, 500);
+
 	// FC2: 1 block, 10 threads per block
-	convLayer<<<dim3(1,1,1), dim3(1,1,10), 0, stream>>>(fc1_relu_out, fc2_out, weights.fc2_kernel, weights.fc2_bias, 1, 1, 1, 1, 10, 1);
+	convLayer<<<dim3(1,1,1), dim3(10,1,1), 0, stream>>>(fc1_relu_out, fc2_out, weights.fc2_kernel, weights.fc2_bias, 1, 1, 1, 1, 10, 1);
+	// cout << "FC2 done" << endl;
+	// printVector(fc2_out, 10);
+
 	// Softmax: 1 block, 10 threads per block
-	// softmax<<<dim3(1,1,1), dim3(1,1,10), 0, stream>>>(fc2_out, outputVector, 10); //! This would have to be changed
-	cudaMemcpy(outputVector, fc2_out, 10 * sizeof(float), cudaMemcpyDeviceToDevice);
+	softmax<<<1, dim3(10,1,1), 0, stream>>>(fc2_out, outputVector, 10); //! This would have to be changed
+	// cout << "Softmax done" << endl;
+	// printVector(outputVector, 10);
+
+	// cudaMemcpy(outputVector, fc2_out, 10 * sizeof(float), cudaMemcpyDeviceToDevice);
 
 	//Free memory
 	cudaFree(c1_out);
@@ -332,17 +271,9 @@ int main() {
 	for (const auto& dirEntry : std::filesystem::recursive_directory_iterator("./pre-proc-img/")){
 		images.push_back(dirEntry.path().string());
 	}
-	// cout << images[0] << endl;
 	//iterate through images
 	// for (int i = 0; i < images.size(); i++){
 		float* inputImage = prep_inputs(images[0]);
-		//printing input image
-		// for (int i = 0; i < 28; i++){
-		// 	for (int j = 0; j < 28; j++){
-		// 		cout << inputImage[i * 28 + j] << " ";
-		// 	}
-		// 	cout << endl;
-		// }
 		float* outputVector;
 		float* host_outputVector = new float[10];
 
@@ -356,16 +287,10 @@ int main() {
 		cudaStreamDestroy(stream);
 		cudaDeviceSynchronize();
 
-		// print along the 3rd index
-		for (int i = 0; i < 10; i++){
-			cout << host_outputVector[i] << endl;
-		}
+		printVector(host_outputVector, 10);
+
 		delete[] host_outputVector;
 		cudaFree(inputImage);
 		cudaFree(outputVector);
 	// }
-	// vector<float> data;
-	// readFile(data, "./weights/conv2.txt");
-	// for (int i = 0; i < data.size(); i++)
-	//	cout << data[i] << endl;
 }
