@@ -337,6 +337,7 @@ vector<int> sorted_indices(float* arr, int size) {
 	return sorted_indices;
 }
 
+namespace fs = std::filesystem;
 int main() {
 	// Loop over the pre-proc-img directory and perform forward prop on each image
 	weights_struct weights = prep_weights();
@@ -345,9 +346,13 @@ int main() {
 	for (const auto& dirEntry : std::filesystem::recursive_directory_iterator("./pre-proc-img/")){
 		images.push_back(dirEntry.path().string());
 	}
+		std::string directory = "./output/";
+    if (!fs::exists(directory)) {
+        fs::create_directories(directory);
+    }
 	//iterate through images
-	for (int i = 0; i < images.size(); i++){
-	// for (int i = 0; i < 1; i++){
+	// for (int i = 0; i < images.size(); i++){
+	for (int i = 0; i < 10; i++){
 		cout << "Image path: " << images[i] << endl;
 		int label = stoi(images[i].substr(25, 1));
 		string filename = images[i].substr(15, images[i].length() - 15);
@@ -377,10 +382,9 @@ int main() {
 		// cout << "Label: " << label << "; ";
 		// cout << "Predicted: " << pred << endl;
 
-		std::string directory = "./output/";
 		std::string out_filename = directory + filename;
 
-		std::ofstream outputFile(filename);
+		std::ofstream outputFile(out_filename);
 		if (!outputFile.is_open()) {
 			std::cerr << "Error opening the file." << std::endl;
 			return 1;
