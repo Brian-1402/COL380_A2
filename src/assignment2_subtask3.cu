@@ -34,6 +34,24 @@ __global__ void convLayer(float* inputMatrix, float* outputMatrix, float* kernel
 	}
 }
 
+__global__ void FCLayer1D(float* inputMatrix, float* outputMatrix, float* kernel, float* bias, int kernel_size, int input_channels, int in_height, int in_width, int out_height, int out_width, int output_channels, int stride = 1) {
+	// int k = blockIdx.x * blockDim.x + threadIdx.x; // channel of output image
+	int a = blockIdx.x * blockDim.x + threadIdx.x; // channel of input image
+	int i = blockIdx.y * blockDim.y + threadIdx.y; // height of output image
+	int j = blockIdx.z * blockDim.z + threadIdx.z; // width of output image
+	float val = 0.0f;
+
+	if (i < out_height && j < out_width && a < input_channels) {
+		for (int k = 0; k < output_channels; a++){ // Iterate through output channels
+			for (int b = 0; b < kernel_size; b++) // Iterate through input rows
+				for (int c = 0; c < kernel_size; c++) // Iterate through input columns
+					val += inputMatrix[(a * in_height + i * stride + b) * in_width + j * stride + c] * kernel[((k * input_channels + a) * kernel_size + b) * kernel_size + c];
+
+			outputMatrix[(k * out_height + i) * out_width + j] = val + bias[k];
+		}
+	}
+}
+
 
 __global__ void pool(float* inputMatrix, float* outputMatrix, int channels, int in_height, int in_width, int out_height, int out_width,int pooldim, int pooltype, int stride = 1) {
 	int k = blockIdx.x * blockDim.x + threadIdx.x; // channel of output image
@@ -263,8 +281,9 @@ void forward_prop(float *inputImage, float *outputVector, weights_struct weights
 	cout << "ReLU done" << endl;
 	printCUDAVector(fc1_relu_out, 500);
 
-	// FC2: 1 block, 10 threads per block
-	convLayer<<<dim3(1,1,1), dim3(10,1,1), 0, stream>>>(fc1_relu_out, fc2_out, weights.fc2_kernel, weights.fc2_bias, 1, 500, 1, 1, 1, 1, 10, 1);
+	// FC2: 4 block, 125 threads per block
+	// Here, x axis is input channels
+	FCLayer1D<<<dim3(4,1,1), dim3(125,1,1), 0, stream>>>(fc1_relu_out, fc2_out, weights.fc2_kernel, weights.fc2_bias, 1, 500, 1, 1, 1, 1, 10, 1);
 	cout << "FC2 done" << endl;
 	printCUDAVector(fc2_out, 10);
 
