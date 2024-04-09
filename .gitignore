@@ -13,4 +13,7 @@ compile_commands.json
 # config files
 *.code-workspace
 .vscode/
+.cache
+
 bin/
+img/

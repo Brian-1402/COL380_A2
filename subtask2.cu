@@ -9,7 +9,7 @@ using namespace std;
 #define AVGPOOL 1
 
 // Apply ReLU activation to each element of the matrix
-__global__ void reLU(float ** inputMatrix, float ** outputMatrix) {
+__global__ void ReLU(float ** inputMatrix, float ** outputMatrix) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j = blockIdx.y * blockDim.y + threadIdx.y;
 	outputMatrix[i][j] = max(0.0f,inputMatrix[i][j]);
@@ -272,7 +272,7 @@ int main(int argc, char** argv){
 		cudaMemcpy(d_inputMatrix, inputMatrix, N * N * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMalloc(&d_outputMatrix, N * N * sizeof(float));
 		if (activation == 0){
-			reLU <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix);
+			ReLU <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix);
 		}
 		else if (activation == 1){
 			tanh <<<blocksPerGrid, threadsPerBlock>>> (d_inputMatrix, d_outputMatrix);
